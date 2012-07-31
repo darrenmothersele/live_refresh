@@ -1,0 +1,65 @@
+<?php
+
+function live_refresh_menu() {
+	return array(
+		'live' => array(
+			'title' => t('Live blog'),
+			'page callback' => '_live_refresh_page',
+			'access arguments' => array('access content'),
+		),
+		'live-refresh-ajax/%' => array(
+			'title' => t('Live refresh'),
+			'page callback' => '_live_refresh_ajax',
+			'page arguments' => array(1),
+			'access arguments' => array('access content'),
+			'type' => MENU_CALLBACK,
+		),
+	);
+}
+
+function _live_refresh_get_nids($since = NULL) {
+	$query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'node')
+	  ->entityCondition('bundle', 'article')
+	  ->propertyCondition('status', 1)
+		->propertyOrderBy('created', 'DESC');
+	if ($since) {
+		$query->propertyCondition('created', $since, '>');
+	} else {
+		$query->range(0, 10);
+	}
+	$entities = $query->execute(); 
+	return empty($entities['node']) ? array() : array_keys($entities['node']);
+}
+
+function _live_refresh_page() {
+	drupal_add_js(drupal_get_path('module', 'live_refresh') . '/js/live-refresh.js');
+  $nids = _live_refresh_get_nids(); 
+  $nodes = node_load_multiple($nids);
+  $last_created = $nodes[$nids[0]]->created;
+  drupal_add_js(array('liveRefresh' => array(
+		'lastCreated' => $last_created,
+		'refreshRate' => 4000,
+	)), 'setting');
+  $build = node_view_multiple($nodes, 'teaser');
+  $build['#prefix'] = '<div id="live-refresh-wrapper">';
+  $build['#suffix'] = '</div>';
+  return $build;
+}
+
+function _live_refresh_ajax($since) {
+  $nids = _live_refresh_get_nids($since);
+  $nodes = node_load_multiple($nids);
+  $last_created = $nodes[$nids[0]]->created;
+  $build = node_view_multiple($nodes, 'teaser');
+  print json_encode(array('lastCreated' => $last_created, 'build' => render($build)));
+}
+
+
+
+
+
+
+
+
+
